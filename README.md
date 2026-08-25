@@ -7,13 +7,70 @@ page synthesises the engine sound from those bursts in real time.
 A big agentic refactor pulls through the gears. A one-line answer is a throttle
 blip. Silence decays back to a lopey idle.
 
-```
-node server.js          # then open http://localhost:4321 and press START ENGINE
-PORT=5000 node server.js
-CLAUDE_PROJECTS=/custom/path node server.js
+## Install
+
+You need Node and a browser. That's the whole list — there are no dependencies,
+no `npm install`, and no build step. Any Node from 12 onward works (the code uses
+nothing newer; verified on 15).
+
+```sh
+git clone https://github.com/msolters/token-engine.git
+cd token-engine
+node server.js
 ```
 
-No dependencies, no build step. Node and a browser, nothing else.
+You should see:
+
+```
+token-engine running -> http://localhost:4321
+watching: /Users/you/.claude/projects
+```
+
+Open **http://localhost:4321** and click **START ENGINE**. The click is required —
+browsers refuse to start audio without one — so nothing will make a sound until
+you press it.
+
+Then go use Claude Code in another window and listen.
+
+### Checking it's actually working
+
+In the page header, the indicator should read **LINK**, and the left panel should
+say **watching ~/.claude**. The odometer climbs as Claude Code burns tokens.
+
+If it says **no transcripts found**, the server looked in the wrong place — see
+`CLAUDE_PROJECTS` below.
+
+If you hear nothing at all, work through these in order:
+
+1. Did you press START ENGINE? It toggles to KILL ENGINE when running.
+2. Drag the **demo throttle** slider up. That drives the engine by hand and
+   proves the audio path works without waiting on any token traffic.
+3. Open the browser console. It should log
+   `[token-engine] simulation clock: audio-worklet`. If it says `timer` instead,
+   the AudioWorklet failed to load and the engine will freeze whenever the window
+   is covered — the warning line above it says why.
+
+### Options
+
+```sh
+PORT=5000 node server.js                     # serve on a different port
+CLAUDE_PROJECTS=/custom/path node server.js  # if your transcripts live elsewhere
+```
+
+### Keeping it running
+
+`node server.js` runs in the foreground and stops when you close the terminal or
+press Ctrl-C. To leave it running in the background:
+
+```sh
+nohup node server.js > /tmp/token-engine.log 2>&1 &
+```
+
+### Tuning the sound without the server
+
+Open `test.html` directly in a browser — no server needed, just double-click it.
+It drives the same audio graph with direct RPM and throttle sliders and a dBFS
+output meter, so you can judge the engine note without waiting for token traffic.
 
 ## Files
 
