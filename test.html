@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TOKEN ENGINE — audio test bench</title>
+<style>
+  :root {
+    --asphalt:#0a0c0f; --panel:#14181d; --panel-edge:#232a32; --dial:#e9edf1;
+    --amber:#ffb020; --redline:#ff2e3d; --label:#5b6470; --ok:#35d07f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%,#12161b 0%,var(--asphalt) 60%);
+    color:var(--dial); font-family:"IBM Plex Mono",ui-monospace,monospace;
+    padding:24px 18px 40px; min-height:100vh;
+  }
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:16px;letter-spacing:.18em;font-weight:600;margin-bottom:6px}
+  h1 .amber{color:var(--amber)}
+  .sub{font-size:11px;line-height:1.7;color:var(--label);margin-bottom:20px}
+  .sub b{color:var(--dial);font-weight:600}
+  .panel{
+    background:linear-gradient(180deg,var(--panel),#10141a);
+    border:1px solid var(--panel-edge); border-radius:10px;
+    padding:16px; margin-bottom:14px;
+  }
+  .panel h2{font-size:10px;letter-spacing:.18em;color:var(--label);text-transform:uppercase;margin-bottom:14px}
+  .row{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+  .ctl{display:flex;flex-direction:column;gap:6px;flex:1;min-width:180px}
+  .ctl label{font-size:10px;letter-spacing:.14em;color:var(--label);text-transform:uppercase}
+  .ctl label span{color:var(--amber);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--amber)}
+  select{background:#0c0f13;color:var(--dial);border:1px solid var(--panel-edge);border-radius:6px;padding:7px;font-family:inherit;font-size:13px}
+  button{
+    font-family:inherit;font-size:11px;letter-spacing:.12em;font-weight:600;
+    color:var(--dial);background:#1b2129;border:1px solid var(--panel-edge);
+    border-radius:6px;padding:10px 14px;cursor:pointer;
+  }
+  button:hover{border-color:var(--amber);color:var(--amber)}
+  button.primary{background:var(--amber);color:var(--asphalt);border-color:var(--amber)}
+  button.primary[data-on="1"]{background:var(--redline);color:var(--dial);border-color:var(--redline)}
+  .chk{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--label);cursor:pointer}
+  .chk input{accent-color:var(--amber);width:15px;height:15px}
+  .meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+  .m .k{font-size:9px;letter-spacing:.16em;color:var(--label);text-transform:uppercase;margin-bottom:4px}
+  .m .v{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+  .m .v.warn{color:var(--redline)}
+  .m .v.good{color:var(--ok)}
+  .bar{height:10px;background:#0c0f13;border:1px solid var(--panel-edge);border-radius:5px;overflow:hidden;margin-top:8px;position:relative}
+  .bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#35d07f,#ffb020 70%,#ff2e3d)}
+  .bar .thresh{position:absolute;top:0;bottom:0;width:1px;background:var(--dial);opacity:.5}
+  .presets{display:flex;flex-wrap:wrap;gap:8px}
+  .note{font-size:11px;line-height:1.7;color:var(--label);margin-top:6px}
+  .note b{color:var(--dial)}
+  code{color:var(--amber);font-size:11px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>ENGINE AUDIO — <span class="amber">ISOLATED TEST BENCH</span></h1>
+<p class="sub">
+  No server. No SSE. No vehicle model. This drives the <b>exact audio graph from index.html</b>
+  with the only two values the synth actually consumes: <b>rpm</b> and <b>eff</b> (effective throttle 0–1).
+  The meter reads the real output bus, so you can tell "the synth is quiet" apart from "the speakers are quiet."
+</p>
+
+<div class="panel">
+  <h2>Transport</h2>
+  <div class="row">
+    <button class="primary" id="start" data-on="0">START ENGINE</button>
+    <div class="ctl">
+      <label for="vol">Volume — <span id="volv">60</span></label>
+      <input id="vol" type="range" min="0" max="100" value="60">
+    </div>
+    <div class="ctl" style="flex:0 0 150px">
+      <label for="cyl">Engine</label>
+      <select id="cyl">
+        <option value="4">Inline-4</option>
+        <option value="6">Flat-6</option>
+        <option value="8" selected>V8</option>
+        <option value="10">V10</option>
+        <option value="12">V12</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Direct inputs — vehicle model bypassed</h2>
+  <div class="row">
+    <div class="ctl">
+      <label for="rpm">RPM — <span id="rpmv">850</span></label>
+      <input id="rpm" type="range" min="600" max="3600" step="10" value="850">
+    </div>
+    <div class="ctl">
+      <label for="eff">Eff (throttle) — <span id="effv">0.00</span></label>
+      <input id="eff" type="range" min="0" max="100" value="0">
+    </div>
+  </div>
+  <div class="presets" style="margin-top:16px">
+    <button data-preset="idle">IDLE 850 / 0%</button>
+    <button data-preset="cruise">CRUISE 1800 / 35%</button>
+    <button data-preset="pull">PULL 2600 / 100%</button>
+    <button data-preset="redline">REDLINE 3600 / 100%</button>
+    <button data-preset="sweep">SWEEP 850 &rarr; 3600</button>
+    <button data-preset="blip">BLIP</button>
+    <button id="popbtn">EXHAUST POP</button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Signal chain — A/B the suspects</h2>
+  <div class="row">
+    <label class="chk"><input type="checkbox" id="bypassComp"> bypass compressor <code>(-18dB / 6:1)</code></label>
+    <div class="ctl">
+      <label for="trim">Output trim — <span id="trimv">1.0</span>&times;</label>
+      <input id="trim" type="range" min="10" max="800" step="10" value="100">
+    </div>
+  </div>
+  <p class="note">
+    The stock chain is <code>master &rarr; compressor &rarr; destination</code>, and <code>master.gain</code> is
+    <code>vol &times; (0.16 + eff&times;0.2 + rpm/3600&times;0.1)</code> &mdash; a ceiling of <b>0.46&times;vol</b> before the
+    compressor takes another bite. Trim is a post-compressor gain that does <i>not</i> exist in index.html; it's here to
+    find the multiplier that actually sounds right.
+  </p>
+</div>
+
+<div class="panel">
+  <h2>Output meter — measured at the destination bus</h2>
+  <div class="meters">
+    <div class="m">
+      <div class="k">Peak</div>
+      <div class="v" id="peak">-&#8734; dB</div>
+    </div>
+    <div class="m">
+      <div class="k">RMS</div>
+      <div class="v" id="rms">-&#8734; dB</div>
+    </div>
+    <div class="m">
+      <div class="k">master.gain (computed)</div>
+      <div class="v" id="loud">0.000</div>
+    </div>
+    <div class="m">
+      <div class="k">Firing freq</div>
+      <div class="v" id="fire">0 Hz</div>
+    </div>
+  </div>
+  <div class="bar"><i id="peakbar"></i><span class="thresh" id="threshmark"></span></div>
+  <p class="note">
+    Bar is peak, &minus;60&nbsp;dBFS to 0. The white tick is the compressor threshold (&minus;18&nbsp;dBFS).
+    Anything left of it is untouched by compression; the stock settings keep almost the whole engine
+    hovering right around that line.
+  </p>
+</div>
+
+</div>
+
+<script>
+"use strict";
+
+/* ===== identical synth graph to index.html ===== */
+const MAXRPM = 3600;
+let ctx = null, nodes = null, analyser = null, popBuf = null;
+
+function makeNoise(c){
+  const b = c.createBuffer(1, c.sampleRate*2, c.sampleRate);
+  const d = b.getChannelData(0);
+  for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+  return b;
+}
+function driveCurve(k){
+  const n=1024, c=new Float32Array(n);
+  for (let i=0;i<n;i++){ const x=(i/(n-1))*2-1; c[i]=Math.tanh(k*x); }
+  return c;
+}
+
+function buildEngine(){
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const master = ctx.createGain(); master.gain.value = 0;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -18; comp.ratio.value = 6;
+
+  // bench additions: switchable comp path + post trim + analyser tap
+  const trim = ctx.createGain(); trim.gain.value = 1;
+  analyser = ctx.createAnalyser(); analyser.fftSize = 2048;
+
+  master.connect(comp);
+  comp.connect(trim);
+  trim.connect(analyser);
+  analyser.connect(ctx.destination);
+
+  const chug = ctx.createGain(); chug.gain.value = 0;
+  const dc = ctx.createConstantSource(); dc.offset.value = 0.72; dc.start();
+  const lfo = ctx.createOscillator(); lfo.type = "sine";
+  const lfoDepth = ctx.createGain(); lfoDepth.gain.value = 0.28;
+  dc.connect(chug.gain); lfo.connect(lfoDepth).connect(chug.gain);
+
+  const drive = ctx.createWaveShaper(); drive.curve = driveCurve(3.2); drive.oversample = "2x";
+  const lp = ctx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=500; lp.Q.value=0.8;
+  const body = ctx.createBiquadFilter(); body.type="peaking"; body.frequency.value=220; body.Q.value=1.1; body.gain.value=7;
+  drive.connect(lp).connect(body).connect(chug).connect(master);
+
+  const mix = ctx.createGain(); mix.gain.value=0.5; mix.connect(drive);
+  const sawA = ctx.createOscillator(); sawA.type="sawtooth";
+  const sawB = ctx.createOscillator(); sawB.type="sawtooth"; sawB.detune.value=9;
+  const gB = ctx.createGain(); gB.gain.value=0.6;
+  const sub = ctx.createOscillator(); sub.type="sine";
+  const gSub = ctx.createGain(); gSub.gain.value=0.9;
+  sawA.connect(mix); sawB.connect(gB).connect(mix); sub.connect(gSub).connect(mix);
+  sawA.start(); sawB.start(); sub.start(); lfo.start();
+
+  const noise = ctx.createBufferSource(); noise.buffer = makeNoise(ctx); noise.loop = true; noise.start();
+  const intakeBP = ctx.createBiquadFilter(); intakeBP.type="bandpass"; intakeBP.Q.value=0.9;
+  const intakeG = ctx.createGain(); intakeG.gain.value=0;
+  const raspBP = ctx.createBiquadFilter(); raspBP.type="bandpass"; raspBP.Q.value=2.2;
+  const raspG = ctx.createGain(); raspG.gain.value=0;
+  noise.connect(intakeBP).connect(intakeG).connect(master);
+  noise.connect(raspBP).connect(raspG).connect(chug);
+
+  nodes = { master, comp, trim, chug, lfo, drive, lp, body, sawA, sawB, sub, intakeBP, intakeG, raspBP, raspG };
+}
+
+function makeNoisePopBuffer(){
+  if (popBuf) return popBuf;
+  popBuf = ctx.createBuffer(1, ctx.sampleRate*0.1, ctx.sampleRate);
+  const d = popBuf.getChannelData(0);
+  for (let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+  return popBuf;
+}
+function pop(vol, cutoff){
+  if (!ctx || !nodes) return;
+  const t = ctx.currentTime;
+  const src = ctx.createBufferSource(); src.buffer = makeNoisePopBuffer();
+  const f = ctx.createBiquadFilter(); f.type="lowpass"; f.frequency.value=cutoff;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t+0.06);
+  src.connect(f).connect(g).connect(nodes.master);
+  src.start(t); src.stop(t+0.08);
+}
+
+/* ===== bench wiring ===== */
+const $ = (id) => document.getElementById(id);
+const rpmS=$("rpm"), effS=$("eff"), volS=$("vol"), cylS=$("cyl"), trimS=$("trim"),
+      bypassC=$("bypassComp"), startBtn=$("start");
+
+let rpm = 850, eff = 0, sweep = null;
+
+function syncLabels(){
+  $("rpmv").textContent = rpmS.value;
+  $("effv").textContent = (Number(effS.value)/100).toFixed(2);
+  $("volv").textContent = volS.value;
+  $("trimv").textContent = (Number(trimS.value)/100).toFixed(1);
+}
+rpmS.oninput = () => { sweep = null; rpm = Number(rpmS.value); syncLabels(); };
+effS.oninput = () => { eff = Number(effS.value)/100; syncLabels(); };
+volS.oninput = trimS.oninput = syncLabels;
+
+trimS.oninput = () => {
+  syncLabels();
+  if (nodes) nodes.trim.gain.setTargetAtTime(Number(trimS.value)/100, ctx.currentTime, 0.03);
+};
+
+bypassC.onchange = () => {
+  if (!nodes) return;
+  try { nodes.master.disconnect(); } catch {}
+  try { nodes.comp.disconnect(); } catch {}
+  if (bypassC.checked) {
+    nodes.master.connect(nodes.trim);          // master -> trim (no compressor)
+  } else {
+    nodes.master.connect(nodes.comp);
+    nodes.comp.connect(nodes.trim);
+  }
+};
+
+function setPoint(r, e){
+  sweep = null;
+  rpm = r; eff = e;
+  rpmS.value = r; effS.value = Math.round(e*100);
+  syncLabels();
+}
+document.querySelectorAll("[data-preset]").forEach(b => {
+  b.onclick = () => {
+    const p = b.dataset.preset;
+    if (p === "idle")    setPoint(850, 0);
+    if (p === "cruise")  setPoint(1800, 0.35);
+    if (p === "pull")    setPoint(2600, 1);
+    if (p === "redline") setPoint(3600, 1);
+    if (p === "sweep")   { setPoint(850, 1); sweep = { t: 0, dur: 5 }; }
+    if (p === "blip")    {
+      setPoint(850, 1);
+      sweep = { t: 0, dur: 1.6, blip: true };
+    }
+  };
+});
+$("popbtn").onclick = () => pop(Number(volS.value)/100 * 0.6, 600);
+
+startBtn.onclick = async () => {
+  if (!ctx) { buildEngine(); bypassC.onchange(); nodes.trim.gain.value = Number(trimS.value)/100; }
+  if (ctx.state === "suspended") await ctx.resume();
+  const on = startBtn.dataset.on === "1";
+  startBtn.dataset.on = on ? "0" : "1";
+  startBtn.textContent = on ? "START ENGINE" : "KILL ENGINE";
+  if (on) nodes.master.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
+};
+
+/* ===== the stock updateAudio(), lifted verbatim except rpm/eff come from the bench ===== */
+function updateAudio(eff, dt){
+  if (!ctx || !nodes) return 0;
+  const t = ctx.currentTime, s = (p,v,tc) => p.setTargetAtTime(v,t,tc);
+  const cyl = Number(cylS.value);
+  const fire = (rpm/60) * (cyl/2);
+
+  s(nodes.sawA.frequency, fire*0.5, 0.02);
+  s(nodes.sawB.frequency, fire*0.25, 0.02);
+  s(nodes.sub.frequency, Math.max(25, fire*0.25), 0.02);
+  s(nodes.lfo.frequency, fire, 0.02);
+  s(nodes.lp.frequency, 300 + rpm*0.30 + eff*900, 0.05);
+  s(nodes.body.frequency, 160 + rpm*0.028, 0.08);
+  s(nodes.intakeBP.frequency, 600 + rpm*0.22, 0.05);
+  s(nodes.intakeG.gain, eff*eff*0.16, 0.06);
+  s(nodes.raspBP.frequency, 140 + rpm*0.05, 0.05);
+  s(nodes.raspG.gain, 0.05 + eff*0.13, 0.06);
+
+  const vol = Number(volS.value)/100;
+  const loud = vol * (0.16 + eff*0.2 + (rpm/MAXRPM)*0.1);
+  s(nodes.master.gain, loud, 0.05);
+
+  if (eff < 0.08 && rpm > 2600 && Math.random() < dt*(rpm/900)) pop(vol*0.5, 350+Math.random()*250);
+  if (rpm >= MAXRPM-40 && Math.random() < dt*22) pop(vol*0.6, 900);
+
+  $("loud").textContent = loud.toFixed(3);
+  $("fire").textContent = Math.round(fire) + " Hz";
+  return loud;
+}
+
+/* ===== metering ===== */
+const buf = new Float32Array(2048);
+const dbTxt = (v) => v <= 0.00001 ? "-∞ dB" : (20*Math.log10(v)).toFixed(1) + " dB";
+const dbPct = (v) => {
+  if (v <= 0.00001) return 0;
+  const db = 20*Math.log10(v);
+  return Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+};
+$("threshmark").style.left = ((-18 + 60)/60*100) + "%";
+
+let peakHold = 0, holdUntil = 0;
+
+function meter(now){
+  if (!analyser) return;
+  analyser.getFloatTimeDomainData(buf);
+  let peak = 0, sum = 0;
+  for (let i=0;i<buf.length;i++){
+    const a = Math.abs(buf[i]);
+    if (a > peak) peak = a;
+    sum += buf[i]*buf[i];
+  }
+  const rms = Math.sqrt(sum/buf.length);
+  if (peak >= peakHold || now > holdUntil) { peakHold = peak; holdUntil = now + 900; }
+
+  const pEl = $("peak"), rEl = $("rms");
+  pEl.textContent = dbTxt(peakHold);
+  rEl.textContent = dbTxt(rms);
+  pEl.className = "v" + (peakHold > 0.99 ? " warn" : peakHold > 0.2 ? " good" : "");
+  $("peakbar").style.width = dbPct(peakHold).toFixed(1) + "%";
+}
+
+/* ===== loop ===== */
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(0.05, (now - last)/1000); last = now;
+
+  if (sweep) {
+    sweep.t += dt;
+    const k = Math.min(1, sweep.t / sweep.dur);
+    if (sweep.blip) {
+      const up = k < 0.35;
+      rpm = up ? 850 + (3400-850)*(k/0.35) : 3400 - (3400-850)*((k-0.35)/0.65);
+      eff = up ? 1 : 0;
+    } else {
+      rpm = 850 + (MAXRPM-850)*k;
+      eff = 1;
+    }
+    rpmS.value = Math.round(rpm);
+    effS.value = Math.round(eff*100);
+    syncLabels();
+    if (k >= 1) sweep = null;
+  }
+
+  if (startBtn.dataset.on === "1") updateAudio(eff, dt);
+  meter(now);
+  requestAnimationFrame(frame);
+}
+syncLabels();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

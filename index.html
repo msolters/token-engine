@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TOKEN ENGINE — Claude Code tachometer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --asphalt: #0a0c0f;
+    --panel: #14181d;
+    --panel-edge: #232a32;
+    --dial: #e9edf1;
+    --amber: #ffb020;
+    --redline: #ff2e3d;
+    --label: #5b6470;
+    --ok: #35d07f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #12161b 0%, var(--asphalt) 60%);
+    color: var(--dial);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100%;
+    padding: 20px 16px 28px;
+  }
+  header {
+    width: 100%; max-width: 980px;
+    display: flex; align-items: baseline; justify-content: space-between;
+    border-bottom: 1px solid var(--panel-edge);
+    padding-bottom: 10px; margin-bottom: 18px;
+  }
+  h1 {
+    font-family: "Michroma", sans-serif;
+    font-size: clamp(14px, 2.4vw, 20px);
+    letter-spacing: 0.18em;
+    font-weight: 400;
+  }
+  h1 .amber { color: var(--amber); }
+  .link {
+    font-size: 11px; letter-spacing: 0.12em; color: var(--label);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #3a424c; }
+  .dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .dot.live { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+
+  .cluster {
+    width: 100%; max-width: 980px;
+    display: grid;
+    grid-template-columns: 1fr minmax(280px, 460px) 1fr;
+    gap: 16px; align-items: center;
+  }
+  .side {
+    background: linear-gradient(180deg, var(--panel), #10141a);
+    border: 1px solid var(--panel-edge);
+    border-radius: 10px;
+    padding: 16px 14px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .field .k {
+    font-size: 10px; letter-spacing: 0.16em; color: var(--label);
+    text-transform: uppercase; margin-bottom: 3px;
+  }
+  .field .v {
+    font-size: clamp(18px, 2.6vw, 26px); font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .field .v.small { font-size: 15px; font-weight: 400; }
+  .gear {
+    font-family: "Michroma", sans-serif;
+    font-size: clamp(40px, 6vw, 62px);
+    text-align: center; color: var(--amber);
+    text-shadow: 0 0 18px rgba(255, 176, 32, 0.35);
+    line-height: 1;
+  }
+  .bar { height: 8px; background: #0c0f13; border: 1px solid var(--panel-edge); border-radius: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, #6a7684, var(--amber)); transition: width 80ms linear; }
+
+  .tachwrap { position: relative; }
+  svg.tach { width: 100%; height: auto; display: block; filter: drop-shadow(0 12px 30px rgba(0,0,0,0.6)); }
+
+  .controls {
+    width: 100%; max-width: 980px;
+    margin-top: 18px;
+    background: linear-gradient(180deg, var(--panel), #10141a);
+    border: 1px solid var(--panel-edge);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex; flex-wrap: wrap; gap: 18px; align-items: center;
+  }
+  button.start {
+    font-family: "Michroma", sans-serif;
+    font-size: 12px; letter-spacing: 0.14em;
+    color: var(--asphalt); background: var(--amber);
+    border: none; border-radius: 6px;
+    padding: 12px 18px; cursor: pointer;
+  }
+  button.start[data-on="1"] { background: var(--redline); color: var(--dial); }
+  button.start:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--amber); outline-offset: 2px;
+  }
+  .ctl { display: flex; flex-direction: column; gap: 5px; min-width: 130px; flex: 1; }
+  .ctl label { font-size: 10px; letter-spacing: 0.16em; color: var(--label); text-transform: uppercase; }
+  input[type=range] { width: 100%; accent-color: var(--amber); }
+  select {
+    background: #0c0f13; color: var(--dial); border: 1px solid var(--panel-edge);
+    border-radius: 6px; padding: 7px; font-family: inherit; font-size: 13px;
+  }
+  .note {
+    max-width: 980px; width: 100%;
+    margin-top: 12px; font-size: 11px; line-height: 1.6; color: var(--label);
+  }
+  .note b { color: var(--dial); font-weight: 600; }
+  @media (max-width: 760px) {
+    .cluster { grid-template-columns: 1fr; }
+    .side { flex-direction: row; flex-wrap: wrap; }
+    .side .field, .side .gearbox { flex: 1 1 40%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bar i { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>TOKEN <span class="amber">ENGINE</span></h1>
+  <div class="link"><span id="dot" class="dot"></span><span id="linktext">CONNECTING</span></div>
+</header>
+
+<div class="cluster">
+  <div class="side">
+    <div class="gearbox">
+      <div class="field"><div class="k">Gear</div></div>
+      <div class="gear" id="gear">N</div>
+    </div>
+    <div class="field">
+      <div class="k">Throttle</div>
+      <div class="bar"><i id="thrbar"></i></div>
+    </div>
+    <div class="field">
+      <div class="k">Session</div>
+      <div class="v small" id="mode">—</div>
+    </div>
+  </div>
+
+  <div class="tachwrap">
+    <svg class="tach" id="tach" viewBox="0 0 400 400" role="img" aria-label="Tachometer"></svg>
+  </div>
+
+  <div class="side">
+    <div class="field">
+      <div class="k">Tokens / sec</div>
+      <div class="v" id="tps">0</div>
+    </div>
+    <div class="field">
+      <div class="k">RPM</div>
+      <div class="v" id="rpmv">850</div>
+    </div>
+    <div class="field">
+      <div class="k">Odometer (tokens)</div>
+      <div class="v small" id="odo">0</div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="start" id="start" data-on="0">START ENGINE</button>
+  <div class="ctl">
+    <label for="vol">Volume</label>
+    <input id="vol" type="range" min="0" max="100" value="60">
+  </div>
+  <div class="ctl">
+    <label for="cyl">Engine</label>
+    <select id="cyl">
+      <option value="4">Inline-4</option>
+      <option value="6">Flat-6</option>
+      <option value="8" selected>V8</option>
+      <option value="10">V10</option>
+      <option value="12">V12</option>
+    </select>
+  </div>
+  <div class="ctl">
+    <label for="sens">Full throttle at — <span id="sensv">10000</span> tok/s</label>
+    <input id="sens" type="range" min="500" max="20000" step="100" value="10000">
+  </div>
+  <div class="ctl">
+    <label for="demo">Demo throttle (manual override)</label>
+    <input id="demo" type="range" min="0" max="100" value="0">
+  </div>
+</div>
+
+<p class="note">
+  Run <b>node server.js</b> in this folder, open <b>http://localhost:4321</b>, press
+  <b>START ENGINE</b>, then go use Claude Code. Every token it burns appends to
+  <b>~/.claude/projects/…/*.jsonl</b>; the server tails those files and streams the
+  bursts here. Big agentic runs sweep the needle through the gears; a one-line
+  answer is a polite blip. No Claude Code activity? The demo throttle drives the
+  engine by hand.
+</p>
+
+<script>
+"use strict";
+/* ============================== Tachometer ============================== */
+const NS = "http://www.w3.org/2000/svg";
+const IDLE = 850, REDLINE = 3200, MAXRPM = 3600, GAUGE_MAX = 4000;
+const A0 = -210, A1 = 30; // needle sweep in degrees
+
+const tach = document.getElementById("tach");
+function el(name, attrs, parent) {
+  const n = document.createElementNS(NS, name);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  (parent || tach).appendChild(n);
+  return n;
+}
+function polar(cx, cy, r, deg) {
+  const a = (deg - 90) * Math.PI / 180;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+}
+function angleFor(rpm) { return A0 + (A1 - A0) * Math.min(rpm, GAUGE_MAX) / GAUGE_MAX; }
+
+(function buildGauge() {
+  el("circle", { cx: 200, cy: 200, r: 192, fill: "#0d1014", stroke: "#232a32", "stroke-width": 2 });
+  el("circle", { cx: 200, cy: 200, r: 178, fill: "none", stroke: "#1a2027", "stroke-width": 1 });
+
+  // redline arc
+  const rArc = 168;
+  const [sx, sy] = polar(200, 200, rArc, angleFor(REDLINE));
+  const [ex, ey] = polar(200, 200, rArc, angleFor(GAUGE_MAX));
+  el("path", {
+    d: `M ${sx} ${sy} A ${rArc} ${rArc} 0 0 1 ${ex} ${ey}`,
+    fill: "none", stroke: "var(--redline)", "stroke-width": 10, "stroke-linecap": "butt", opacity: 0.9
+  });
+
+  // ticks + numerals
+  for (let k = 0; k <= GAUGE_MAX; k += 250) {
+    const major = k % 1000 === 0;
+    const a = angleFor(k);
+    const [x1, y1] = polar(200, 200, 172, a);
+    const [x2, y2] = polar(200, 200, major ? 150 : 161, a);
+    el("line", {
+      x1, y1, x2, y2,
+      stroke: k >= REDLINE ? "var(--redline)" : "var(--dial)",
+      "stroke-width": major ? 3 : 1.4, opacity: major ? 1 : 0.7
+    });
+    if (major) {
+      const [tx, ty] = polar(200, 200, 130, a);
+      const t = el("text", {
+        x: tx, y: ty + 6, "text-anchor": "middle",
+        fill: k >= REDLINE ? "var(--redline)" : "var(--dial)",
+        "font-size": 20, "font-family": "Michroma, sans-serif"
+      });
+      t.textContent = k / 1000;
+    }
+  }
+  const lbl = el("text", { x: 200, y: 258, "text-anchor": "middle", fill: "var(--label)", "font-size": 11, "letter-spacing": 3, "font-family": "IBM Plex Mono, monospace" });
+  lbl.textContent = "RPM × 1000";
+  const brand = el("text", { x: 200, y: 286, "text-anchor": "middle", fill: "var(--label)", "font-size": 10, "letter-spacing": 4, "font-family": "Michroma, sans-serif" });
+  brand.textContent = "CLAUDE CODE";
+})();
+
+const needle = el("g", {});
+el("line", { x1: 200, y1: 236, x2: 200, y2: 52, stroke: "var(--amber)", "stroke-width": 5, "stroke-linecap": "round" }, needle);
+el("line", { x1: 200, y1: 236, x2: 200, y2: 52, stroke: "rgba(255,176,32,0.25)", "stroke-width": 11, "stroke-linecap": "round" }, needle);
+el("circle", { cx: 200, cy: 200, r: 14, fill: "#1a2027", stroke: "var(--panel-edge)", "stroke-width": 2 });
+el("circle", { cx: 200, cy: 200, r: 5, fill: "var(--amber)" });
+
+/* ============================ Telemetry (SSE) ============================ */
+const dot = document.getElementById("dot");
+const linktext = document.getElementById("linktext");
+const modeEl = document.getElementById("mode");
+let tpsEMA = 0, odometer = 0, connected = false, lastBurstAt = 0;
+
+function connect() {
+  let es;
+  try { es = new EventSource("/events"); } catch { onDown(); return; }
+  es.onopen = () => { connected = true; dot.classList.add("on"); linktext.textContent = "LINK"; };
+  es.onerror = () => { connected = false; onDown(); };
+  es.onmessage = (m) => {
+    let d; try { d = JSON.parse(m.data); } catch { return; }
+    const tps = (d.burst || 0) / 0.25;            // server emits every 250 ms
+    tpsEMA = tps > tpsEMA ? tpsEMA * 0.4 + tps * 0.6   // rev up fast
+                          : tpsEMA * 0.92 + tps * 0.08; // fall off slower
+    odometer = d.total || odometer;
+    if (d.burst > 0) { lastBurstAt = performance.now(); dot.classList.add("live"); }
+    else if (performance.now() - lastBurstAt > 1200) dot.classList.remove("live");
+    modeEl.textContent = d.watching ? "watching ~/.claude" : "no transcripts found";
+  };
+}
+function onDown() {
+  dot.classList.remove("on", "live");
+  linktext.textContent = "NO LINK — DEMO";
+  modeEl.textContent = "demo mode";
+}
+connect();
+
+/* ======================== Vehicle model (RPM/gears) ====================== */
+const sens = document.getElementById("sens"), sensv = document.getElementById("sensv");
+const demo = document.getElementById("demo");
+sens.oninput = () => (sensv.textContent = sens.value);
+
+let rpm = IDLE, gear = 1, shiftCut = 0, throttle = 0;
+
+// Knee shapes the tok/s -> throttle curve. The old map was log1p(ema)/log1p(full),
+// which hit 50% throttle at 27 tok/s and saturated long before `full` — the whole
+// useful range was crammed into the first breath of activity. This one is a proper
+// normalised log: 0 at rest, exactly 1.0 at `full`, and gentle in between.
+const KNEE = 6;
+
+// Shift points. These are absolute RPM, the way an automatic behaves — NOT tied to
+// redline. Tying upshifts to redline meant every gear past 1st had an equilibrium
+// below the trigger once the load term was in, so the box could never leave 1st on
+// real traffic. Searched against captured sessions: reaches 6th on a sustained run,
+// stays at idle on ordinary chatter.
+const SHIFT_UP = 2600, SHIFT_DN = 1540, SHIFT_DROP = 0.74;
+
+function step(dt) {
+  const full = Number(sens.value);
+  const fromTokens = Math.min(1, Math.log1p(KNEE * Math.max(0, tpsEMA) / full) / Math.log1p(KNEE));
+  const manual = Number(demo.value) / 100;
+  const t = Math.max(fromTokens, manual);
+  throttle += (t - throttle) * Math.min(1, dt * 8);
+
+  let eff = shiftCut > 0 ? 0 : throttle;
+  if (rpm >= MAXRPM - 30) eff *= (Math.random() < 0.5 ? 0.1 : 1); // rev limiter stutter
+  shiftCut = Math.max(0, shiftCut - dt);
+
+  const gearFactor = 1 + (gear - 1) * 0.50;                // taller gears rev slower
+  const accel = eff * 4200 / gearFactor;
+  const coast = (1 - eff) * (700 + Math.max(0, rpm - IDLE) * 0.85);
+  const load  = rpm * 0.45;   // drivetrain + aero: always on, so WOT settles instead of pegging
+  rpm += (accel - coast - load) * dt;
+
+  if (rpm > SHIFT_UP && throttle > 0.25 && gear < 6) { gear++; rpm *= SHIFT_DROP; shiftCut = 0.12; }
+  if (rpm < SHIFT_DN && gear > 1) { gear--; rpm /= SHIFT_DROP; }  // downshift with rev-match blip
+  rpm = Math.max(IDLE + (Math.random() - 0.5) * 40, Math.min(MAXRPM, rpm));
+  return eff;
+}
+
+/* ============================= Engine audio ============================= */
+let ctx = null, nodes = null;
+
+function makeNoise(c) {
+  const b = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+  const d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return b;
+}
+function driveCurve(k) {
+  const n = 1024, c = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    c[i] = Math.tanh(k * x);
+  }
+  return c;
+}
+
+function buildEngine() {
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const master = ctx.createGain(); master.gain.value = 0;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -18; comp.ratio.value = 6;
+  master.connect(comp).connect(ctx.destination);
+
+  // tonal core: firing-frequency saws → drive → body filters, amplitude-chugged
+  const chug = ctx.createGain(); chug.gain.value = 0;
+  const dc = ctx.createConstantSource(); dc.offset.value = 0.72; dc.start();
+  const lfo = ctx.createOscillator(); lfo.type = "sine";
+  const lfoDepth = ctx.createGain(); lfoDepth.gain.value = 0.28;
+  dc.connect(chug.gain); lfo.connect(lfoDepth).connect(chug.gain);
+
+  const drive = ctx.createWaveShaper(); drive.curve = driveCurve(3.2); drive.oversample = "2x";
+  const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 500; lp.Q.value = 0.8;
+  const body = ctx.createBiquadFilter(); body.type = "peaking"; body.frequency.value = 220; body.Q.value = 1.1; body.gain.value = 7;
+  drive.connect(lp).connect(body).connect(chug).connect(master);
+
+  const mix = ctx.createGain(); mix.gain.value = 0.5; mix.connect(drive);
+  const sawA = ctx.createOscillator(); sawA.type = "sawtooth";
+  const sawB = ctx.createOscillator(); sawB.type = "sawtooth"; sawB.detune.value = 9;
+  const gB = ctx.createGain(); gB.gain.value = 0.6;
+  const sub = ctx.createOscillator(); sub.type = "sine";
+  const gSub = ctx.createGain(); gSub.gain.value = 0.9;
+  sawA.connect(mix); sawB.connect(gB).connect(mix); sub.connect(gSub).connect(mix);
+  sawA.start(); sawB.start(); sub.start(); lfo.start();
+
+  // breath: intake hiss + exhaust rasp
+  const noise = ctx.createBufferSource(); noise.buffer = makeNoise(ctx); noise.loop = true; noise.start();
+  const intakeBP = ctx.createBiquadFilter(); intakeBP.type = "bandpass"; intakeBP.Q.value = 0.9;
+  const intakeG = ctx.createGain(); intakeG.gain.value = 0;
+  const raspBP = ctx.createBiquadFilter(); raspBP.type = "bandpass"; raspBP.Q.value = 2.2;
+  const raspG = ctx.createGain(); raspG.gain.value = 0;
+  noise.connect(intakeBP).connect(intakeG).connect(master);
+  noise.connect(raspBP).connect(raspG).connect(chug);
+
+  nodes = { master, chug, lfo, drive, lp, body, sawA, sawB, sub, intakeBP, intakeG, raspBP, raspG };
+}
+
+function pop(vol, cutoff) { // single exhaust pop (decel burble / limiter crackle)
+  if (!ctx || !nodes) return;
+  const t = ctx.currentTime;
+  const src = ctx.createBufferSource(); src.buffer = makeNoisePopBuffer();
+  const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = cutoff;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+  src.connect(f).connect(g).connect(nodes.master);
+  src.start(t); src.stop(t + 0.08);
+}
+let popBuf = null;
+function makeNoisePopBuffer() {
+  if (popBuf) return popBuf;
+  popBuf = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
+  const d = popBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  return popBuf;
+}
+
+const cylSel = document.getElementById("cyl");
+const volCtl = document.getElementById("vol");
+
+function updateAudio(eff, dt) {
+  if (!ctx || !nodes) return;
+  const t = ctx.currentTime, s = (p, v, tc) => p.setTargetAtTime(v, t, tc);
+  const cyl = Number(cylSel.value);
+  const fire = (rpm / 60) * (cyl / 2);          // 4-stroke firing frequency
+
+  // The tonal core sits an octave *below* the firing frequency; the chug LFO stays
+  // at `fire`. A saw pitched at `fire` on top of amplitude modulation at `fire` is
+  // what read as a wasp — the modulation alone already implies the firing rate, and
+  // it generates the upper harmonics for free.
+  s(nodes.sawA.frequency, fire * 0.5, 0.02);
+  s(nodes.sawB.frequency, fire * 0.25, 0.02);
+  s(nodes.sub.frequency, Math.max(25, fire * 0.25), 0.02);
+  s(nodes.lfo.frequency, fire, 0.02);
+  s(nodes.lp.frequency, 300 + rpm * 0.30 + eff * 900, 0.05);
+  s(nodes.body.frequency, 160 + rpm * 0.028, 0.08);
+  s(nodes.intakeBP.frequency, 600 + rpm * 0.22, 0.05);
+  s(nodes.intakeG.gain, eff * eff * 0.16, 0.06);
+  s(nodes.raspBP.frequency, 140 + rpm * 0.05, 0.05);
+  s(nodes.raspG.gain, 0.05 + eff * 0.13, 0.06);
+
+  const vol = Number(volCtl.value) / 100;
+  const loud = vol * (0.16 + eff * 0.2 + (rpm / MAXRPM) * 0.1);
+  s(nodes.master.gain, loud, 0.05);
+
+  // decel burble + limiter crackle
+  if (eff < 0.08 && rpm > 2600 && Math.random() < dt * (rpm / 900)) pop(vol * 0.5, 350 + Math.random() * 250);
+  if (rpm >= MAXRPM - 40 && Math.random() < dt * 22) pop(vol * 0.6, 900);
+}
+
+/* ============================== Clocking ================================= */
+/* The simulation deliberately does NOT run on requestAnimationFrame.
+   Chrome throttles rAF to ~1 Hz — and eventually stops it outright — whenever the
+   tab is hidden or the window is fully occluded by another window. That is this
+   app's normal operating state: you're in a terminal, not staring at the gauge.
+   Web Audio keeps rendering on its own thread the entire time, so a throttled rAF
+   doesn't pause the sound — it freezes the *parameters*, and the graph sustains
+   whatever RPM it last saw. That's the drone-on-a-plateau symptom.
+   So the physics is clocked off an AudioWorklet, which lives on the audio render
+   thread and is never throttled, and rAF is demoted to painting pixels. */
+
+const startBtn = document.getElementById("start");
+const gearEl = document.getElementById("gear"), tpsEl = document.getElementById("tps"),
+      rpmEl = document.getElementById("rpmv"), odoEl = document.getElementById("odo"),
+      thrbar = document.getElementById("thrbar");
+
+const TICK_FRAMES = 1024;   // ~23 ms per tick at 44.1 kHz
+const TICKER_SRC = `
+class Ticker extends AudioWorkletProcessor {
+  constructor(opts) { super(); this._n = 0; this._every = opts.processorOptions.every; }
+  process() {
+    this._n += 128;                                   // one render quantum
+    if (this._n >= this._every) { this._n = 0; this.port.postMessage(currentTime); }
+    return true;                                      // stay alive, emit silence
+  }
+}
+registerProcessor('ticker', Ticker);
+`;
+
+let clockMode = "none", timerClock = null, audioClockAt = 0;
+
+function simulate(dt) {
+  const eff = step(dt);
+  if (startBtn.dataset.on === "1") updateAudio(eff, dt);
+}
+
+/* Pre-audio clock so the gauge lives before START is ever pressed. This one *is*
+   throttled in background tabs — acceptable, because with no AudioContext there's
+   no sound to freeze, only a needle nobody is looking at. */
+function installTimerClock() {
+  if (timerClock) return;
+  let prev = performance.now();
+  timerClock = setInterval(() => {
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
+    simulate(dt);
+  }, 25);
+  clockMode = "timer";
+}
+
+async function installAudioClock() {
+  try {
+    const url = URL.createObjectURL(new Blob([TICKER_SRC], { type: "application/javascript" }));
+    await ctx.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    const ticker = new AudioWorkletNode(ctx, "ticker", { processorOptions: { every: TICK_FRAMES } });
+    ticker.connect(ctx.destination);   // outputs silence; the connection is what keeps it pulled
+    audioClockAt = ctx.currentTime;
+    ticker.port.onmessage = (e) => {
+      // dt comes from the audio clock, so it stays true even while the tab is hidden
+      const dt = Math.min(0.1, Math.max(0, e.data - audioClockAt));
+      audioClockAt = e.data;
+      if (dt > 0) simulate(dt);
+    };
+    if (timerClock) { clearInterval(timerClock); timerClock = null; }
+    clockMode = "audio-worklet";
+  } catch (err) {
+    console.warn("[token-engine] AudioWorklet clock unavailable; staying on the timer clock " +
+                 "(it will throttle when the window is occluded)", err);
+    installTimerClock();
+  }
+  console.log("[token-engine] simulation clock:", clockMode);
+}
+
+/* ================================ Start ================================== */
+startBtn.onclick = async () => {
+  if (!ctx) buildEngine();
+  if (ctx.state === "suspended") await ctx.resume();
+  if (clockMode !== "audio-worklet") await installAudioClock();
+  const on = startBtn.dataset.on === "1";
+  startBtn.dataset.on = on ? "0" : "1";
+  startBtn.textContent = on ? "START ENGINE" : "KILL ENGINE";
+  if (on) nodes.master.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
+};
+
+/* rAF paints and nothing else — free to throttle when nobody is watching */
+function paint() {
+  needle.setAttribute("transform", `rotate(${angleFor(rpm)} 200 200)`);
+  gearEl.textContent = throttle < 0.02 && rpm <= IDLE + 80 ? "N" : String(gear);
+  tpsEl.textContent = Math.round(tpsEMA).toLocaleString();
+  rpmEl.textContent = String(Math.round(rpm / 10) * 10);
+  odoEl.textContent = odometer.toLocaleString();
+  thrbar.style.width = (throttle * 100).toFixed(1) + "%";
+  requestAnimationFrame(paint);
+}
+
+installTimerClock();
+requestAnimationFrame(paint);
+</script>
+</body>
+</html>
