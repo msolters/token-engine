@@ -7,30 +7,54 @@ page synthesises the engine sound from those bursts in real time.
 A big agentic refactor pulls through the gears. A one-line answer is a throttle
 blip. Silence decays back to a lopey idle.
 
-## Install
+## Setup
 
 You need Node and a browser. That's the whole list — there are no dependencies,
 no `npm install`, and no build step. Any Node from 12 onward works (the code uses
 nothing newer; verified on 15).
 
+**1. Get the code.**
+
 ```sh
 git clone https://github.com/msolters/token-engine.git
 cd token-engine
-node server.js
 ```
 
-You should see:
+**2. Check your prerequisites.** Nothing is downloaded; this only confirms Node
+is on your PATH.
+
+```sh
+make install
+```
 
 ```
-token-engine running -> http://localhost:4321
+node v22.11.0 found — no dependencies to install. Next: make run
+```
+
+**3. Start the server.**
+
+```sh
+make run
+```
+
+```
+token-engine running → http://localhost:4321
 watching: /Users/you/.claude/projects
 ```
 
-Open **http://localhost:4321** and click **START ENGINE**. The click is required —
-browsers refuse to start audio without one — so nothing will make a sound until
-you press it.
+**4. Open the page and click START ENGINE.**
 
-Then go use Claude Code in another window and listen.
+```sh
+make browse          # or just visit http://localhost:4321
+```
+
+The click is required — browsers refuse to start audio without one — so nothing
+will make a sound until you press it.
+
+**5. Go use Claude Code in another window and listen.**
+
+If you would rather skip `make`, every target is a one-liner: `make run` is
+`node server.js`, and that works on its own.
 
 ### Checking it's actually working
 
@@ -53,29 +77,55 @@ If you hear nothing at all, work through these in order:
 ### Options
 
 ```sh
-PORT=5000 node server.js                     # serve on a different port
-CLAUDE_PROJECTS=/custom/path node server.js  # if your transcripts live elsewhere
+make run PORT=5000                           # serve on a different port
+CLAUDE_PROJECTS=/custom/path make run        # if your transcripts live elsewhere
+
+PORT=5000 node server.js                     # the same, without make
+CLAUDE_PROJECTS=/custom/path node server.js
 ```
 
 ### Keeping it running
 
-`node server.js` runs in the foreground and stops when you close the terminal or
-press Ctrl-C. To leave it running in the background:
+`make run` runs in the foreground and stops when you close the terminal or press
+Ctrl-C. To leave it running in the background:
 
 ```sh
-nohup node server.js > /tmp/token-engine.log 2>&1 &
+make start      # backgrounds it, logs to .token-engine.log
+make status     # is it up?
+make logs       # tail the log
+make stop       # shut it down
 ```
 
 ### Tuning the sound without the server
 
-Open `test.html` directly in a browser — no server needed, just double-click it.
-It drives the same audio graph with direct RPM and throttle sliders and a dBFS
-output meter, so you can judge the engine note without waiting for token traffic.
+```sh
+make bench
+```
+
+That opens `test.html` directly in a browser — no server needed. It drives the
+same audio graph with direct RPM and throttle sliders and a dBFS output meter, so
+you can judge the engine note without waiting for token traffic.
+
+### All make targets
+
+Run `make` with no arguments to list them:
+
+| target | what it does |
+| --- | --- |
+| `make install` | check prerequisites (Node 12+); nothing is downloaded |
+| `make run` | run the server in the foreground |
+| `make start` / `stop` / `restart` | run it in the background |
+| `make status` | report whether the background server is up |
+| `make logs` | tail `.token-engine.log` |
+| `make browse` | open the engine page in a browser |
+| `make bench` | open `test.html`, the audio bench |
+| `make clean` | remove the pid and log files |
 
 ## Files
 
 | file | what it is |
 | --- | --- |
+| `Makefile` | install / run / start / stop targets — see above |
 | `server.js` | tails `~/.claude/projects/**/*.jsonl`, streams token bursts over SSE |
 | `index.html` | the tachometer and the Web Audio engine synth |
 | `test.html` | isolated audio bench — no server, no SSE, direct RPM/throttle control, dBFS meter |
