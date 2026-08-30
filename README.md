@@ -7,7 +7,24 @@ page synthesises the engine sound from those bursts in real time.
 A big agentic refactor pulls through the gears. A one-line answer is a throttle
 blip. Silence decays back to a lopey idle.
 
-## Setup
+## Getting started
+
+```sh
+git clone https://github.com/msolters/token-engine.git
+cd token-engine
+make start
+```
+
+That is the whole install. `make start` runs the server in the background, opens
+**http://localhost:4321**, and all that is left is to click **START ENGINE** —
+browsers refuse to start audio without a click. Then go use Claude Code in
+another window and listen.
+
+There is nothing to download: no dependencies, no `npm install`, no build step.
+You do need **Node 12 or newer** and a browser — `make start` checks for Node and
+stops with a clear message if it is missing, but it will not install it for you.
+
+## Setup, step by step
 
 You need Node and a browser. That's the whole list — there are no dependencies,
 no `npm install`, and no build step. Any Node from 12 onward works (the code uses
