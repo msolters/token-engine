@@ -31,29 +31,37 @@ make install
 node v22.11.0 found — no dependencies to install. Next: make run
 ```
 
-**3. Start the server.**
+**3. Start the server and open the page.**
 
 ```sh
-make run
+make start
 ```
+
+```
+started (pid 12345) -> http://localhost:4321
+logs: make logs    stop: make stop
+```
+
+It runs in the background and opens http://localhost:4321 for you once the port
+answers. `make logs` shows the server's own banner, including which directory it
+ended up watching:
 
 ```
 token-engine running → http://localhost:4321
 watching: /Users/you/.claude/projects
 ```
 
-**4. Open the page and click START ENGINE.**
+If you would rather keep it in the foreground and watch it work, `make run` does
+that instead — same server, no browser, Ctrl-C to stop.
 
-```sh
-make browse          # or just visit http://localhost:4321
-```
+**4. Click START ENGINE.**
 
 The click is required — browsers refuse to start audio without one — so nothing
 will make a sound until you press it.
 
 **5. Go use Claude Code in another window and listen.**
 
-If you would rather skip `make`, every target is a one-liner: `make run` is
+If you would rather skip `make`, the targets are thin wrappers: `make run` is
 `node server.js`, and that works on its own.
 
 ### Checking it's actually working
@@ -77,8 +85,8 @@ If you hear nothing at all, work through these in order:
 ### Options
 
 ```sh
-make run PORT=5000                           # serve on a different port
-CLAUDE_PROJECTS=/custom/path make run        # if your transcripts live elsewhere
+make start PORT=5000                         # serve on a different port
+CLAUDE_PROJECTS=/custom/path make start      # if your transcripts live elsewhere
 
 PORT=5000 node server.js                     # the same, without make
 CLAUDE_PROJECTS=/custom/path node server.js
@@ -87,14 +95,20 @@ CLAUDE_PROJECTS=/custom/path node server.js
 ### Keeping it running
 
 `make run` runs in the foreground and stops when you close the terminal or press
-Ctrl-C. To leave it running in the background:
+Ctrl-C. `make start` is the background form — the one step 3 uses:
 
 ```sh
-make start      # backgrounds it, logs to .token-engine.log
+make start      # backgrounds it, opens the page, logs to .token-engine.log
 make status     # is it up?
 make logs       # tail the log
 make stop       # shut it down
+make restart    # stop, then start
 ```
+
+`make start` is safe to run twice: if the server is already up it says so and
+leaves the existing one alone rather than starting a second copy. If something
+else is already serving the port — a `make run` in another terminal, say — it
+notices that too, and just opens the page.
 
 ### Tuning the sound without the server
 
@@ -114,10 +128,11 @@ Run `make` with no arguments to list them:
 | --- | --- |
 | `make install` | check prerequisites (Node 12+); nothing is downloaded |
 | `make run` | run the server in the foreground |
-| `make start` / `stop` / `restart` | run it in the background |
+| `make start` | run it in the background and open the page |
+| `make stop` / `restart` | stop it / stop then start again |
 | `make status` | report whether the background server is up |
 | `make logs` | tail `.token-engine.log` |
-| `make browse` | open the engine page in a browser |
+| `make browse` | alias for `make start` — opening the page implies a running server |
 | `make bench` | open `test.html`, the audio bench |
 | `make clean` | remove the pid and log files |
 

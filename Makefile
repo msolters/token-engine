@@ -15,22 +15,25 @@ URL := http://localhost:$(PORT)
 PID := .token-engine.pid
 LOG := .token-engine.log
 
+# readiness probe — node is guaranteed present, curl is not
+PROBE := $(NODE) -e "require('http').get('$(URL)',function(r){process.exit(0)}).on('error',function(){process.exit(1)})"
+
 OPENER := $(shell command -v open >/dev/null 2>&1 && echo open || echo xdg-open)
 
 .DEFAULT_GOAL := help
-.PHONY: help check-node install run start stop restart status logs browse bench clean
+.PHONY: help check-node serve launch install run start stop restart status logs browse bench clean
 
 help:
 	@echo "token-engine"
 	@echo
 	@echo "  make install   check prerequisites (Node 12+); nothing is downloaded"
 	@echo "  make run       run the server in the foreground on $(URL)"
-	@echo "  make start     run it in the background, logging to $(LOG)"
+	@echo "  make start     run it in the background and open the page"
 	@echo "  make stop      stop the background server"
 	@echo "  make restart   stop, then start"
 	@echo "  make status    is the background server up?"
 	@echo "  make logs      tail $(LOG)"
-	@echo "  make browse    open $(URL) in a browser"
+	@echo "  make browse    alias for start — opening implies a running server"
 	@echo "  make bench     open test.html — the audio bench, no server needed"
 	@echo "  make clean     remove $(PID) and $(LOG)"
 	@echo
@@ -46,13 +49,26 @@ install: check-node
 run: check-node
 	PORT=$(PORT) $(NODE) server.js
 
-start: check-node
+# internal: bring the background server up unless something already serves $(PORT)
+serve: check-node
 	@if [ -f $(PID) ] && kill -0 "$$(cat $(PID))" 2>/dev/null; then \
-	    echo "already running (pid $$(cat $(PID))) -> $(URL)"; exit 0; \
+	    echo "already running (pid $$(cat $(PID))) -> $(URL)"; \
+	elif $(PROBE); then \
+	    echo "$(URL) is already being served (not by make start) — leaving it alone"; \
+	else \
+	    PORT=$(PORT) nohup $(NODE) server.js > $(LOG) 2>&1 & \
+	    echo $$! > $(PID); \
+	    echo "started (pid $$(cat $(PID))) -> $(URL)"; \
+	    echo "logs: make logs    stop: make stop"; \
 	fi
-	@PORT=$(PORT) nohup $(NODE) server.js > $(LOG) 2>&1 & echo $$! > $(PID)
-	@echo "started (pid $$(cat $(PID))) -> $(URL)"
-	@echo "logs: make logs    stop: make stop"
+
+# internal: wait for the port to answer, then hand the page to a browser
+launch: serve
+	@n=0; while [ $$n -lt 60 ] && ! $(PROBE); do n=$$((n+1)); sleep 0.1; done
+	@$(OPENER) $(URL) >/dev/null 2>&1 || echo "open $(URL) in your browser"
+
+# start the server in the background and open the page
+start: launch
 
 stop:
 	@if [ -f $(PID) ] && kill -0 "$$(cat $(PID))" 2>/dev/null; then \
@@ -76,8 +92,8 @@ status:
 logs:
 	@tail -f $(LOG)
 
-browse:
-	@$(OPENER) $(URL)
+# an alias for start: opening the page implies the server is up
+browse: start
 
 bench:
 	@$(OPENER) test.html
