@@ -1,5 +1,9 @@
 # token-engine
 
+![The token-engine tachometer: a rev counter reading 870 RPM with the needle off
+idle, a gear indicator, tokens-per-second and an odometer of tokens
+burned.](docs/screenshot.png)
+
 Turns Claude Code token throughput into an engine note. The server tails Claude
 Code's session transcripts and streams token bursts to a browser tachometer; the
 page synthesises the engine sound from those bursts in real time.
